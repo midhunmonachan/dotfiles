@@ -62,9 +62,7 @@ executeAndCheck chmod +x scripts/installer.sh
 
 # Section header for installer script
 echo && echo -e "${YELLOW}=== Running Installer Script ===${RESET}"
-./scripts/installer.sh | while IFS= read -r line; do
-    echo -e "  ${CYAN}> $line${RESET}"
-done
+./scripts/installer.sh
 
 # Section footer
 echo -e "${GREEN}=== Setup Complete ===${RESET}"

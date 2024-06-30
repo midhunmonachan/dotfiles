@@ -1,6 +1,5 @@
-dotfiles:
-  - source: 
-    target: 
+symlinks:
+  - test.conf:/etc/test.conf
 
 scripts:
   - script:
