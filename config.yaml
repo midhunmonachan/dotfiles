@@ -1,0 +1,6 @@
+dotfiles:
+  - source: 
+    target: 
+
+scripts:
+  - script:
