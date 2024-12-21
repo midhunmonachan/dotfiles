@@ -1,24 +1,42 @@
 #!/bin/sh
 
-# Function to prompt for GitHub user details
+# Function to prompt for GitHub details
 prompt_github_details() {
   GITHUB_NAME=$(git config --global user.name)
   GITHUB_EMAIL=$(git config --global user.email)
 
-  if [ -z "$GITHUB_NAME" ]; then
-    read -p "Enter your GitHub name: " GITHUB_NAME
-    git config --global user.name "$GITHUB_NAME" || return 1
-  fi
-
-  if [ -z "$GITHUB_EMAIL" ]; then
-    read -p "Enter your GitHub email: " GITHUB_EMAIL
-    git config --global user.email "$GITHUB_EMAIL" || return 1
+  if [ -z "$GITHUB_NAME" ] || [ -z "$GITHUB_EMAIL" ]; then
+    print_prompt "Enter your git name: "
+    read -r GITHUB_NAME
+    print_prompt "Enter your git email: "
+    read GITHUB_EMAIL
+    git config --global user.name "$GITHUB_NAME"
+    git config --global user.email "$GITHUB_EMAIL"
+  else
+    echo "Current git user details:"
+    printf "Name: "
+    print_key_output "$GITHUB_NAME"
+    printf "Email: "
+    print_key_output "$GITHUB_EMAIL"
+    print_prompt "Do you want to modify these details? (y/n): "
+    read MODIFY_DETAILS
+    if [ "$MODIFY_DETAILS" = "y" ]; then
+      print_prompt "Enter your git name: "
+      read -r GITHUB_NAME
+      print_prompt "Enter your git email: "
+      read GITHUB_EMAIL
+      git config --global user.name "$GITHUB_NAME"
+      git config --global user.email "$GITHUB_EMAIL"
+    fi
   fi
 }
 
 # Function to delete existing SSH and GPG keys
 delete_existing_keys() {
-  read -p "Do you want to delete all existing SSH and GPG keys? (y/n): " DELETE_KEYS
+  print_prompt "Do you want to delete all existing SSH and GPG keys? (y/n): "
+  read DELETE_KEYS
+
+  print_empty_line
 
   if [ "$DELETE_KEYS" = "y" ]; then
     # Delete existing SSH keys
@@ -33,8 +51,6 @@ delete_existing_keys() {
   else
     print_warning "No keys were deleted. Continuing with existing keys."
   fi
-
-  print_empty_line
 }
 
 # Function to generate SSH and GPG keys
@@ -46,10 +62,10 @@ generate_keys() {
     eval "$(ssh-agent -s)" > /dev/null || return 1
     ssh-add "$SSH_KEY_FILE" 2>/dev/null || return 1
     print_info "SSH key generated and added to ssh-agent. Copy the following key to your GitHub account settings:"
-    cat "$SSH_KEY_FILE.pub"
+    print_key_output "$(cat "$SSH_KEY_FILE.pub")"
   else
     print_warning "SSH key already exists. Copy the following key to your GitHub account settings:"
-    cat "$SSH_KEY_FILE.pub"
+    print_key_output "$(cat "$SSH_KEY_FILE.pub")"
   fi
 
   print_empty_line
@@ -68,15 +84,21 @@ Name-Email: $GITHUB_EMAIL
 Expire-Date: 0
 EOF
 
-    gpg --batch --generate-key gpg_batch 2>/dev/null || return 1
+    gpg --batch --generate-key gpg_batch > /dev/null 2>&1 || return 1
     rm gpg_batch
 
     print_info "GPG key generated. Copy the following key to your GitHub account settings:"
-    gpg --armor --export "$GITHUB_EMAIL" 2>/dev/null
+    print_key_output "$(gpg --armor --export "$GITHUB_EMAIL" 2>/dev/null)"
   else
     print_warning "GPG key already exists. Copy the following key to your GitHub account settings:"
-    gpg --armor --export "$GITHUB_EMAIL" 2>/dev/null
+    print_key_output "$(gpg --armor --export "$GITHUB_EMAIL" 2>/dev/null)"
   fi
 
   print_empty_line
+
+  # Configure Git to use the GPG key
+  GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG 2>/dev/null | grep '^sec' | awk '{print $2}' | cut -d'/' -f2)
+  git config --global user.signingkey "$GPG_KEY_ID" || return 1
+  git config --global commit.gpgSign true || return 1
+  print_info "Git configured to sign commits with the GPG key."
 }
