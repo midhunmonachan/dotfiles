@@ -14,6 +14,8 @@ This repository contains my personal dotfiles and configuration files for variou
 > [!NOTE]
 > This command will download and execute the installation script. Make sure to review the script before running it to ensure it meets your security and privacy requirements.
 
+**You need `curl` installed on your system to use this command.**
+
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/midhunmonachan/dotfiles/install.sh)"
 ```
