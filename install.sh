@@ -12,5 +12,17 @@ install_dependencies() {
 	[[ "${ID:-unknown}" == "ubuntu" ]] && sudo apt update -y && sudo apt install -y --no-install-recommends git;
 }
 
+install_dotfiles() {
+	log INFO "Installing dotfiles...";
+	if [[ -d "$HOME/.dotfiles" ]]; then
+		log INFO "Existing .dotfiles directory found. Removing it before fresh installation."
+		rm -rf "$HOME/.dotfiles" || { log ERROR "Failed to remove existing .dotfiles directory."; exit 1; }
+	fi
+	git clone https://github.com/midhunmonachan/dotfiles.git "$HOME/.dotfiles" || { log ERROR "Failed to clone dotfiles repository."; exit 1; }
+
+	rm -f "$HOME/.dotfiles/README.md" && rm -f "$HOME/.dotfiles/install.sh"
+}
+
 check_os
 install_dependencies
+install_dotfiles
