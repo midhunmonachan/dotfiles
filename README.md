@@ -17,7 +17,7 @@ This repository contains my personal dotfiles and configuration files for variou
 **You need `curl` installed on your system to use this command.**
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/midhunmonachan/dotfiles/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/midhunmonachan/dotfiles/main/install.sh)"
 ```
 
 > [!WARNING]
