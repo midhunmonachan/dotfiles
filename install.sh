@@ -23,6 +23,15 @@ install_dotfiles() {
   log INFO "Dotfiles installed."
 }
 
+install_dot_command() {
+  log INFO "Installing 'dot' command..."
+  [[ ! -f "dot_command.sh" ]] && exit "'dot_command.sh' not found."
+  sudo chmod +x "dot_command.sh" || exit "Failed to make 'dot_command.sh' executable."
+  sudo cp "dot_command.sh" "/usr/local/bin/dot" || exit "Failed to copy 'dot_command.sh' to /usr/local/bin/dot"
+  log INFO "'dot' command installed to /usr/local/bin/dot."
+}
+
 check_os
 install_dependencies
 install_dotfiles
+install_dot_command
