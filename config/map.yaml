@@ -1,0 +1,11 @@
+# This YAML file defines symlinks for all config files.
+#
+# Instructions:
+# - List each dotfile you want to symlink under the 'dotfiles' key.
+# - For each dotfile, specify:
+#     - 'source': The relative path to the dotfile within your dotfiles repository.
+#     - 'target': The absolute path where the symlink should be created on your system.
+
+dotfiles:
+  - source: config/gitconfig
+    target: ~/.gitconfig
