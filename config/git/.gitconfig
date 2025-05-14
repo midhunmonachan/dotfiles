@@ -1,0 +1,5 @@
+[include]
+	path = ~/.gitconfig.local
+
+[alias]
+	oops = "!git reset HEAD~1 && git add -A && git commit -C ORIG_HEAD && git push -f"
