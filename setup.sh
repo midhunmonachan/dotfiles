@@ -37,6 +37,31 @@ echo "=== Script execution started on $(date) ===" >>"$LOG_FILE"
 # Configuration Variables
 #---------------------------------------------------------------------------------
 
+# List of basic packages to install
+BASIC_PACKAGES=(
+	"software-properties-common" # Common software properties
+	"apt-transport-https"        # Allows the use of HTTPS for APT
+	"ca-certificates"            # Common CA certificates
+	"openssh-server"             # OpenSSH server
+	"git"                        # Version control system
+	"gnupg"                      # GNU Privacy Guard
+	"gh"                         # GitHub CLI
+	"curl"                       # Command line tool for transferring data
+	"wget"                       # Command line utility for downloading files
+	"ufw"                        # Uncomplicated Firewall
+	"fail2ban"                   # Intrusion prevention software
+	"htop"                       # Interactive process viewer
+	"unzip"                      # Required for extracting zip files
+	"zip"                        # Required for creating zip files
+	"nano"                       # Text editor
+)
+
+# List of PPAs to add
+PPA_LIST=(
+	"ppa:ondrej/nginx" # For Nginx
+	"ppa:ondrej/php"   # For PHP
+)
+
 #---------------------------------------------------------------------------------
 # Functions
 #---------------------------------------------------------------------------------
@@ -50,10 +75,21 @@ log() {
 	echo "--------------------------------------------------------------------------------"
 }
 
-# Function to update and upgrade the system
-update_system() {
-	log "Updating and upgrading system"
-	apt-get update -y && apt-get dist-upgrade -y
+# Function to update package lists, install basic packages, add PPAs and upgrade the system
+initialize_system() {
+	log "Updating package lists"
+	apt-get update -y
+
+	log "Installing basic packages"
+	apt-get install -y "${BASIC_PACKAGES[@]}"
+
+	log "Adding External Repositories"
+	for ppa in "${PPA_LIST[@]}"; do add-apt-repository -y "$ppa"; done && apt-get update -y
+
+	log "Upgrading system"
+	apt-get dist-upgrade -y
+
+	log "Cleaning up"
 	apt-get autoremove -y && apt-get autoclean -y
 }
 
@@ -61,8 +97,7 @@ update_system() {
 # Main Script
 #---------------------------------------------------------------------------------
 
-# Update and upgrade the system
-update_system
+initialize_system
 
 #---------------------------------------------------------------------------------
 # Cleanup
