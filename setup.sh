@@ -37,6 +37,26 @@ echo "=== Script execution started on $(date) ===" >>"$LOG_FILE"
 # Configuration Variables
 #---------------------------------------------------------------------------------
 
+# PHP version to install
+PHP_VERSION="8.4" # Latest as of 2025-05-21
+
+# PHP extensions to install
+PHP_EXTENSIONS=(
+	"cli"       # Command-line interface for PHP scripts
+	"fpm"       # FastCGI Process Manager for serving PHP via web servers
+	"mysql"     # MySQL database driver for PHP
+	"mbstring"  # Multibyte string support (required for many frameworks)
+	"xml"       # XML parsing support
+	"curl"      # Client URL library for PHP (HTTP requests, APIs)
+	"gd"        # Image processing library
+	"intl"      # Internationalization functions (localization, formatting)
+	"bcmath"    # Arbitrary precision mathematics
+	"zip"       # Zip archive support
+	"tokenizer" # Tokenizing PHP source code (used by some frameworks)
+	"opcache"   # Opcode caching for improved performance
+	"redis"     # Redis key-value store support
+)
+
 # List of basic packages to install
 BASIC_PACKAGES=(
 	"software-properties-common" # Common software properties
@@ -76,7 +96,7 @@ log() {
 }
 
 # Function to update package lists, install basic packages, add PPAs and upgrade the system
-initialize_system() {
+setup_system() {
 	log "Updating package lists"
 	apt-get update -y
 
@@ -93,11 +113,23 @@ initialize_system() {
 	apt-get autoremove -y && apt-get autoclean -y
 }
 
+setup_web_server() {
+	log "Setting up web server"
+	apt-get install -y nginx
+}
+
+setup_php_environment() {
+	log "Setting up PHP environment"
+	apt-get install -y "php$PHP_VERSION" "${PHP_EXTENSIONS[@]/#/php$PHP_VERSION-}"
+}
+
 #---------------------------------------------------------------------------------
 # Main Script
 #---------------------------------------------------------------------------------
 
-initialize_system
+setup_system
+setup_web_server
+setup_php_environment
 
 #---------------------------------------------------------------------------------
 # Cleanup
