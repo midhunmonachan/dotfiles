@@ -15,6 +15,9 @@
 # Exit on error, unset vars, or failed pipes
 set -euo pipefail
 
+# Suppress interactive prompts during package installs
+export DEBIAN_FRONTEND=noninteractive
+
 #---------------------------------------------------------------------------------
 # Configuration Variables
 #---------------------------------------------------------------------------------
