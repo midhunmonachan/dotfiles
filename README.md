@@ -2,7 +2,7 @@
 > - This script is under active development. Use at your own risk.
 > - Intended for fresh Ubuntu/Debian installations only.
 > - Review the code before running on production systems.
-> - Do not run as root, the script will prompt for sudo when needed.
+> - This script must be executed with root privileges.
 
 # Midhun's Server Setup Script
 
