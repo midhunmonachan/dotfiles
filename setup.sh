@@ -40,6 +40,9 @@ echo "=== Script execution started on $(date) ===" >>"$LOG_FILE"
 # PHP version to install
 PHP_VERSION="8.4" # Latest as of 2025-05-21
 
+# Node.js version to install
+NODEJS_VERSION="24" # Latest as of 2025-05-21
+
 # PHP extensions to install
 PHP_EXTENSIONS=(
 	"cli"       # Command-line interface for PHP scripts
@@ -57,12 +60,21 @@ PHP_EXTENSIONS=(
 	"redis"     # Redis key-value store support
 )
 
+# List of composer global packages to install
+COMPOSER_GLOBAL_PACKAGES=(
+	"laravel/installer" # Laravel installer
+)
+
+# List of node.js global packages to install
+NODEJS_GLOBAL_PACKAGES=(
+	"yarn" # Package manager for Node.js
+)
+
 # List of basic packages to install
 BASIC_PACKAGES=(
 	"software-properties-common" # Common software properties
 	"apt-transport-https"        # Allows the use of HTTPS for APT
 	"ca-certificates"            # Common CA certificates
-	"openssh-server"             # OpenSSH server
 	"git"                        # Version control system
 	"gnupg"                      # GNU Privacy Guard
 	"gh"                         # GitHub CLI
@@ -123,6 +135,37 @@ setup_php_environment() {
 	apt-get install -y "php$PHP_VERSION" "${PHP_EXTENSIONS[@]/#/php$PHP_VERSION-}"
 }
 
+setup_composer() {
+	log "Setting up Composer"
+	local expected_checksum actual_checksum
+	expected_checksum="$(curl -fsSL https://composer.github.io/installer.sig)"
+	curl -fsSL -o composer-setup.php https://getcomposer.org/installer
+	actual_checksum="$(sha384sum composer-setup.php | awk '{ print $1 }')"
+	if [[ "$expected_checksum" != "$actual_checksum" ]]; then
+		echo 'ERROR: Invalid Composer installer checksum'
+		rm -f composer-setup.php
+		exit 1
+	fi
+	php composer-setup.php --install-dir=/usr/local/bin --filename=composer
+	rm composer-setup.php
+
+	log "Installing Composer global packages"
+	local user="${SUDO_USER:-$(logname)}"
+	sudo -u "$user" composer global require "${COMPOSER_GLOBAL_PACKAGES[@]}"
+}
+
+setup_nodejs() {
+	log "Setting up Node.js"
+	curl -fsSL https://deb.nodesource.com/setup_"$NODEJS_VERSION".x | bash -
+	apt-get install -y nodejs
+	# Fix permissions issues for npm global packages
+	npm config set prefix ~/.local
+	PATH=~/.local/bin/:$PATH
+	log "Installing Node.js global packages"
+	local user="${SUDO_USER:-$(logname)}"
+	npm install -g "${NODEJS_GLOBAL_PACKAGES[@]}"
+}
+
 #---------------------------------------------------------------------------------
 # Main Script
 #---------------------------------------------------------------------------------
@@ -130,6 +173,8 @@ setup_php_environment() {
 setup_system
 setup_web_server
 setup_php_environment
+setup_composer
+setup_nodejs
 
 #---------------------------------------------------------------------------------
 # Cleanup
