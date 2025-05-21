@@ -50,13 +50,25 @@ log() {
 	echo "--------------------------------------------------------------------------------"
 }
 
+# Function to update and upgrade the system
+update_system() {
+	log "Updating and upgrading system"
+	apt-get update -y && apt-get dist-upgrade -y
+	apt-get autoremove -y && apt-get autoclean -y
+}
+
 #---------------------------------------------------------------------------------
 # Main Script
 #---------------------------------------------------------------------------------
 
+# Update and upgrade the system
+update_system
+
 #---------------------------------------------------------------------------------
 # Cleanup
 #---------------------------------------------------------------------------------
+
+log "Script execution completed"
 
 # Log the end time of the script execution
 echo "=== Script execution completed on $(date) ===" >>"$LOG_FILE"
