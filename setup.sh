@@ -60,6 +60,25 @@ touch "$LOG_FILE" && exec > >(tee -a "$LOG_FILE") 2>&1
 echo "=== Script execution started on $(date) ===" >>"$LOG_FILE"
 
 #---------------------------------------------------------------------------------
+# Script Cleanup
+#---------------------------------------------------------------------------------
+
+# Function to clean up resources when script exits
+script_cleanup() {
+	# Kill background process that keeps sudo alive
+	kill "$(jobs -p)" &>/dev/null || true
+
+	# Log script completion
+	echo "=== Script execution completed on $(date) ===" >>"$LOG_FILE"
+
+	# Reset terminal settings
+	tput sgr0
+}
+
+# Register the cleanup function to run when the script exits
+trap script_cleanup EXIT INT TERM
+
+#---------------------------------------------------------------------------------
 # Configuration Variables
 #---------------------------------------------------------------------------------
 
@@ -502,16 +521,6 @@ setup_system() {
 #---------------------------------------------------------------------------------
 
 setup_system
-
-#---------------------------------------------------------------------------------
-# Cleanup
-#---------------------------------------------------------------------------------
-
-# Log the end time of the script execution
-echo "=== Script execution completed on $(date) ===" >>"$LOG_FILE"
-
-# Notify the user about the log file location
-echo "Log saved to $LOG_FILE" >/dev/tty
 
 #---------------------------------------------------------------------------------
 # Notes
