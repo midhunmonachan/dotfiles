@@ -224,7 +224,7 @@ configure_git() {
 	git config --global core.editor "nano" || error_and_exit "Unable to set git editor"
 
 	# Verify git configuration
-	git config --list || error_and_exit "Unable to list git configuration"
+	git config --global --list || error_and_exit "Unable to list git configuration"
 }
 
 #---------------------------------------------------------------------------------
@@ -348,8 +348,12 @@ php_extensions() {
 
 install_composer() {
 	log info "Installing Composer"
+
+	# Download and run installation script
 	curl -sS https://getcomposer.org/installer -o composer-setup.php &&
 		sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer || error_and_exit "Failed to install Composer"
+
+	# Cleanup after installation
 	rm -f composer-setup.php
 }
 
@@ -365,8 +369,15 @@ composer_packages() {
 #---------------------------------------------------------------------------------
 install_nodejs() {
 	log info "Installing Node.js via NVM"
+
+	# Download and Run NVM Setup Script
 	curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash || error_and_exit "Failed to install NVM"
-	bash -c 'source "$HOME/.nvm/nvm.sh" && nvm install node && corepack enable yarn' || error_and_exit "Failed to install Node.js or enable yarn"
+
+	# Source NVM into the current script session
+	export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh" || error_and_exit "Failed to source NVM"
+
+	# Install latest Node.js and enable yarn (npm alternative)
+	nvm install node && corepack enable yarn || error_and_exit "Failed to install Node.js or enable yarn"
 }
 
 install_nodejs_packages() {
