@@ -346,6 +346,20 @@ wsl_shortcut() {
 }
 
 #---------------------------------------------------------------------------------
+# Bash Setup
+#---------------------------------------------------------------------------------
+
+bash_setup() {
+	log info "Setting up bash profile"
+
+	# Set bash starting directory
+	grep -qFx -- "cd ~" ~/.bashrc || echo "cd ~" >> ~/.bashrc
+
+	# Reload bash profile
+	source ~/.bashrc || error_and_exit "Failed to reload bash profile"
+}
+
+#---------------------------------------------------------------------------------
 # Firewall Configuration (UFW)
 #---------------------------------------------------------------------------------
 
@@ -460,10 +474,13 @@ setup_system() {
 
 	configure_github_cli
 	configure_git
+
 	configure_ssh_key
 	configure_gpg_key
+
 	code_directory
 	wsl_shortcut
+	bash_setup
 
 	configure_ufw
 	configure_fail2ban
