@@ -63,6 +63,9 @@ echo "=== Script execution started on $(date) ===" >>"$LOG_FILE"
 # Configuration Variables
 #---------------------------------------------------------------------------------
 
+# Code Folder Location
+CODE_DIR="$HOME/code"
+
 # PHP version to install
 PHP_VERSION="8.4" # Latest as of 2025-05-21
 
@@ -280,6 +283,29 @@ configure_gpg_key() {
 }
 
 #---------------------------------------------------------------------------------
+# Setup Code Directory
+#---------------------------------------------------------------------------------
+
+code_directory() {
+	log info "Cloning all GitHub repositories to $CODE_DIR"
+
+	# Create code directory and change to it
+	[[ -d "$CODE_DIR" ]] && rm -rf "$CODE_DIR" && echo "Removed existing code directory: $CODE_DIR"
+	mkdir -p "$CODE_DIR" || error_and_exit "Failed to create code folder: $CODE_DIR"
+	cd "$CODE_DIR" || error_and_exit "Failed to change directory to $CODE_DIR"
+
+	# Fetch url list of all repositories
+	log info "Fetching list of all your repositories (public and private)..."
+	local REPO_URLS=$(gh repo list --limit 1000 --json sshUrl --jq '.[].sshUrl') || error_and_exit "Failed to list GitHub repositories"
+
+	# Clone all repositories
+	[[ -z "$REPO_URLS" ]] && echo "No repositories found to clone." || while read -r url; do git clone "$url"; done <<<"$REPO_URLS"
+
+	# Change back to the original directory
+	cd "$(dirname "${BASH_SOURCE[0]}")"
+}
+
+#---------------------------------------------------------------------------------
 # Firewall Configuration (UFW)
 #---------------------------------------------------------------------------------
 
@@ -396,6 +422,7 @@ setup_system() {
 	configure_git
 	configure_ssh_key
 	configure_gpg_key
+	code_directory
 
 	configure_ufw
 	configure_fail2ban
