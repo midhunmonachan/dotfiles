@@ -306,6 +306,44 @@ code_directory() {
 }
 
 #---------------------------------------------------------------------------------
+# Windows Shortcut for Code Directory
+#---------------------------------------------------------------------------------
+
+wsl_shortcut() {
+	# Continue only if running in WSL
+	! grep -qE "(Microsoft|WSL)" /proc/version &>/dev/null && return 0
+
+	log info "Creating Windows shortcut for WSL code directory"
+
+	local win_dir_name="code"
+
+	# Get Windows user profile path
+	local win_user_profile=$(powershell.exe -NoProfile -NonInteractive -Command "echo \$env:USERPROFILE" | tr -d '\r')
+
+	# Create Windows shortcut path
+	local windows_code_path="${win_user_profile}\\${win_dir_name}.lnk"
+
+	# PowerShell script to create the shortcut
+	local ps_script
+	ps_script="\$wshell = New-Object -ComObject WScript.Shell; "
+	ps_script+="\$sc = \$wshell.CreateShortcut('${windows_code_path}'); "
+	ps_script+="\$sc.TargetPath = 'explorer.exe'; "
+	ps_script+="\$sc.Arguments = '$(wsl.exe wslpath -w "$CODE_DIR")'; "
+	ps_script+="\$sc.Description = 'Shortcut to WSL Code Directory ($CODE_DIR)'; "
+	ps_script+="\$sc.IconLocation = 'imageres.dll, 166'; " # WSL-like folder icon
+	ps_script+="\$sc.Save()"
+
+	# Encode the PowerShell script to Base64 (UTF-16LE is PowerShell's default)
+	# This is the most reliable way to pass complex commands to powershell.exe
+	local encoded_ps_command
+	encoded_ps_command=$(echo "$ps_script" | iconv -f UTF-8 -t UTF-16LE | base64 -w 0) || error_and_exit "Failed to encode PowerShell command"
+
+	powershell.exe -NoProfile -NonInteractive -EncodedCommand "$encoded_ps_command" || error_and_exit "Failed to create Windows shortcut using PowerShell"
+
+	echo "Windows shortcut created: $windows_code_path"
+}
+
+#---------------------------------------------------------------------------------
 # Firewall Configuration (UFW)
 #---------------------------------------------------------------------------------
 
@@ -423,6 +461,7 @@ setup_system() {
 	configure_ssh_key
 	configure_gpg_key
 	code_directory
+	wsl_shortcut
 
 	configure_ufw
 	configure_fail2ban
