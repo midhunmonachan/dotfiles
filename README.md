@@ -1,6 +1,6 @@
 > [!IMPORTANT]
 > - This script is under active development. Use at your own risk.
-> - Intended for fresh Ubuntu/Debian installations only.
+> - Intended for fresh Ubuntu 24.04 installations only.
 > - Review the code before running on production systems.
 > - Do not run as root. This script will prompt for sudo password.
 

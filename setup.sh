@@ -12,9 +12,9 @@
 # Checks
 #---------------------------------------------------------------------------------
 
-# Check if it is compatible OS
-if [[ ! -f /etc/debian_version ]]; then
-	echo "ERROR: This script only works on Debian/Ubuntu systems"
+# Check if it is running Ubuntu 24.04
+if ! grep -q "Ubuntu 24.04" /etc/os-release; then
+	echo "ERROR: This script is intended for Ubuntu 24.04 only."
 	exit 1
 fi
 
@@ -252,6 +252,9 @@ configure_ssh_key() {
 	# Set Github CLI operations protocol to SSH
 	gh config set git_protocol ssh || error_and_exit "Failed to set GitHub CLI git protocol to SSH"
 
+	# Add GitHub's SSH key to known_hosts
+	ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || error_and_exit "Failed to add GitHub to known_hosts"
+
 	echo "SSH key configured and added to GitHub successfully."
 }
 
@@ -295,7 +298,6 @@ code_directory() {
 	cd "$CODE_DIR" || error_and_exit "Failed to change directory to $CODE_DIR"
 
 	# Fetch url list of all repositories
-	log info "Fetching list of all your repositories (public and private)..."
 	local REPO_URLS=$(gh repo list --limit 1000 --json sshUrl --jq '.[].sshUrl') || error_and_exit "Failed to list GitHub repositories"
 
 	# Clone all repositories
@@ -498,6 +500,6 @@ echo "Log saved to $LOG_FILE" >/dev/tty
 # Notes
 #---------------------------------------------------------------------------------
 # - This script is under active development. Use at your own risk.
-# - Intended for fresh Ubuntu/Debian installations only.
+# - Intended for fresh Ubuntu 24.04 installations only.
 # - Review the code before running on production systems.
 # - Do not run as root. This script will prompt for sudo password.
