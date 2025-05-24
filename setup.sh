@@ -200,6 +200,28 @@ configure_github_cli() {
 }
 
 #---------------------------------------------------------------------------------
+# Git Configuration
+#---------------------------------------------------------------------------------
+
+configure_git() {
+	log info "Configuring Git for GitHub User"
+
+	# Get GitHub username and email automatically
+	local GITHUB_USER=$(gh api user -q .name) || error_and_exit "Unable to fetch GitHub username"
+	local GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email"
+
+	# Set global git configuration
+	git config --global user.name "$GITHUB_USER" || error_and_exit "Unable to set git name"
+	git config --global user.email "$GITHUB_EMAIL" || error_and_exit "Unable to set git email"
+	git config --global init.defaultBranch main || error_and_exit "Unable to set default branch"
+	git config --global pull.rebase true || error_and_exit "Unable to set pull.rebase"
+	git config --global core.editor "nano" || error_and_exit "Unable to set git editor"
+
+	# Verify git configuration
+	git config --list || error_and_exit "Unable to list git configuration"
+}
+
+#---------------------------------------------------------------------------------
 # Firewall Configuration (UFW)
 #---------------------------------------------------------------------------------
 
@@ -302,6 +324,7 @@ setup_system() {
 	cleanup_system
 
 	configure_github_cli
+	configure_git
 
 	configure_ufw
 	configure_fail2ban
