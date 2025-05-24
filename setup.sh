@@ -14,13 +14,13 @@
 
 # Check if it is compatible OS
 if [[ ! -f /etc/debian_version ]]; then
-	log error "This script only works on Debian/Ubuntu systems"
+	echo "ERROR: This script only works on Debian/Ubuntu systems"
 	exit 1
 fi
 
 # Ensure the script is not executed as root
 if [[ $EUID -eq 0 ]]; then
-	log error "Do not run this script as root. Please execute as a regular user."
+	echo "ERROR: Do not run this script as root. Please execute as a regular user."
 	exit 1
 fi
 
@@ -30,7 +30,7 @@ fi
 
 # Get sudo privileges
 if ! sudo -v; then
-	log error "Failed to obtain sudo privileges. Please check your user permissions."
+	echo "ERROR: Failed to obtain sudo privileges. Please check your user permissions."
 	exit 1
 fi
 
@@ -203,6 +203,10 @@ configure_github_cli() {
 
 	# Check GitHub CLI authentication status
 	gh auth status || error_and_exit "GitHub CLI authentication status check failed"
+
+	# Get name and email for logged in Github User
+	GITHUB_USER=$(gh api user -q .name) || error_and_exit "Unable to fetch GitHub username"
+	GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email"
 }
 
 #---------------------------------------------------------------------------------
@@ -210,11 +214,7 @@ configure_github_cli() {
 #---------------------------------------------------------------------------------
 
 configure_git() {
-	log info "Configuring Git for GitHub User"
-
-	# Get GitHub username and email automatically
-	local GITHUB_USER=$(gh api user -q .name) || error_and_exit "Unable to fetch GitHub username"
-	local GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email"
+	log info "Configuring Git"
 
 	# Set global git configuration
 	git config --global user.name "$GITHUB_USER" || error_and_exit "Unable to set git name"
@@ -232,10 +232,7 @@ configure_git() {
 #---------------------------------------------------------------------------------
 
 configure_ssh_key() {
-	log info "Generating SSH key and adding to GitHub"
-
-	# Get GitHub user email automatically
-	local GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email for SSH key comment"
+	log info "Generating and adding SSH key to GitHub"
 
 	# Generate SSH key if it doesn't exist
 	if [[ ! -f ~/.ssh/id_ed25519 ]]; then
@@ -260,11 +257,7 @@ configure_ssh_key() {
 #---------------------------------------------------------------------------------
 
 configure_gpg_key() {
-	log info "Generating GPG key and adding to GitHub"
-
-	# Get GitHub user name and email
-	local GITHUB_USER=$(gh api user -q .name) || error_and_exit "Unable to fetch GitHub username for GPG key"
-	local GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email for GPG key"
+	log info "Generating and adding GPG key to GitHub"
 
 	# Generate GPG key if it doesn't exist
 	if [[ -z "$(gpg --list-secret-keys --with-colons "$GITHUB_EMAIL" | grep '^sec:')" ]]; then
