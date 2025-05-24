@@ -189,6 +189,17 @@ essential_packages() {
 }
 
 #---------------------------------------------------------------------------------
+# GitHub CLI Configuration
+#---------------------------------------------------------------------------------
+
+configure_github_cli() {
+	log info "Configuring GitHub CLI"
+
+	gh auth login -p https -h github.com -w || error_and_exit "GitHub CLI login failed"
+	gh auth status || error_and_exit "GitHub CLI authentication status check failed"
+}
+
+#---------------------------------------------------------------------------------
 # Firewall Configuration (UFW)
 #---------------------------------------------------------------------------------
 
@@ -289,6 +300,8 @@ setup_system() {
 	add_repositories
 	upgrade_system
 	cleanup_system
+
+	configure_github_cli
 
 	configure_ufw
 	configure_fail2ban
