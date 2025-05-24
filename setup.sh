@@ -180,12 +180,46 @@ install_package() {
 }
 
 # Install essential packages
-install_essential_packages() {
+essential_packages() {
 	log info "Installing essential packages"
 	update_package_lists
 	for package in "${ESSENTIAL_PACKAGES[@]}"; do
 		install_package "$package" "$package"
 	done
+}
+
+#---------------------------------------------------------------------------------
+# Firewall Configuration (UFW)
+#---------------------------------------------------------------------------------
+
+configure_ufw() {
+	log info "Configuring UFW (Uncomplicated Firewall)"
+
+	# Set default policies
+	sudo ufw default deny incoming || error_and_exit "Failed to set UFW incoming policy"
+	sudo ufw default allow outgoing || error_and_exit "Failed to set UFW outgoing policy"
+
+	# Allow essential ports
+	sudo ufw allow ssh || error_and_exit "Failed to allow SSH through UFW"
+	sudo ufw allow http || error_and_exit "Failed to allow HTTP through UFW"
+	sudo ufw allow https || error_and_exit "Failed to allow HTTPS through UFW"
+
+	# Enable UFW
+	sudo ufw --force enable || error_and_exit "Failed to enable UFW"
+
+	# Check UFW status
+	sudo ufw status verbose || error_and_exit "Failed to check UFW status"
+}
+
+#---------------------------------------------------------------------------------
+# Intrusion Prevention (Fail2Ban)
+#---------------------------------------------------------------------------------
+
+configure_fail2ban() {
+	log info "Configuring Fail2Ban"
+	sudo systemctl enable fail2ban || error_and_exit "Failed to enable Fail2Ban service"
+	sudo systemctl restart fail2ban || error_and_exit "Failed to restart Fail2Ban"
+	sudo systemctl status fail2ban || error_and_exit "Failed to check Fail2Ban status"
 }
 
 #---------------------------------------------------------------------------------
@@ -204,7 +238,7 @@ install_php() {
 	install_package "php$PHP_VERSION" "PHP $PHP_VERSION"
 }
 
-install_php_extensions() {
+php_extensions() {
 	for extension in "${PHP_EXTENSIONS[@]}"; do
 		install_package "php$PHP_VERSION-$extension" "PHP extension: $extension"
 	done
@@ -221,7 +255,7 @@ install_composer() {
 	rm -f composer-setup.php
 }
 
-install_composer_packages() {
+composer_packages() {
 	log info "Installing Composer global packages"
 	for package in "${COMPOSER_GLOBAL_PACKAGES[@]}"; do
 		composer global require "$package" || error_and_exit "Failed to install Composer package $package"
@@ -251,15 +285,21 @@ install_nodejs_packages() {
 # Main setup function
 setup_system() {
 	log info "Starting system setup"
-	install_essential_packages
+	essential_packages
 	add_repositories
 	upgrade_system
 	cleanup_system
+
+	configure_ufw
+	configure_fail2ban
+
 	install_nginx
 	install_php
-	install_php_extensions
+	php_extensions
+
 	install_composer
-	install_composer_packages
+	composer_packages
+
 	install_nodejs
 	install_nodejs_packages
 	log info "System setup completed"
