@@ -9,14 +9,36 @@
 # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
 #---------------------------------------------------------------------------------
+# Checks
+#---------------------------------------------------------------------------------
+
+# Check if it is compatible OS
+if [[ ! -f /etc/debian_version ]]; then
+	log error "This script only works on Debian/Ubuntu systems"
+	exit 1
+fi
+
+# Ensure the script is not executed as root
+if [[ $EUID -eq 0 ]]; then
+	log error "Do not run this script as root. Please execute as a regular user."
+	exit 1
+fi
+
+#---------------------------------------------------------------------------------
 # Initialization
 #---------------------------------------------------------------------------------
 
-# Check if the script is run as root
-if [[ $EUID -ne 0 ]]; then
-	echo "This script must be run as root. Please use sudo or run as root user."
+# Get sudo privileges
+if ! sudo -v; then
+	log error "Failed to obtain sudo privileges. Please check your user permissions."
 	exit 1
 fi
+
+# Keep sudo alive
+while sleep 240; do
+	sudo -n true || exit
+	kill -0 "$$" || exit
+done &
 
 # Exit on error, unset vars, or failed pipes
 set -euo pipefail
@@ -25,9 +47,13 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 # Log file for script output
-LOG_FILE="/var/log/dotfiles-setup-$(date +%Y%m%d-%H%M%S).log"
+LOG_FILE="/var/log/dotfiles/$(date +%Y%m%d-%H%M%S).log"
 
-# Create log file and redirect output
+# Create log directory if it doesn't exist and set permissions
+sudo mkdir -p "$(dirname "$LOG_FILE")"
+sudo chmod 777 "$(dirname "$LOG_FILE")"
+
+# Create log file and redirect output to it
 touch "$LOG_FILE" && exec > >(tee -a "$LOG_FILE") 2>&1
 
 # Log the start time of the script execution
@@ -40,8 +66,8 @@ echo "=== Script execution started on $(date) ===" >>"$LOG_FILE"
 # PHP version to install
 PHP_VERSION="8.4" # Latest as of 2025-05-21
 
-# Node.js version to install
-NODEJS_VERSION="24" # Latest as of 2025-05-21
+# NVM version to install
+NVM_VERSION="0.40.3" # Latest as of 2025-05-21
 
 # PHP extensions to install
 PHP_EXTENSIONS=(
@@ -67,11 +93,11 @@ COMPOSER_GLOBAL_PACKAGES=(
 
 # List of node.js global packages to install
 NODEJS_GLOBAL_PACKAGES=(
-	"yarn" # Package manager for Node.js
+	"vite" # React build tool
 )
 
 # List of basic packages to install
-BASIC_PACKAGES=(
+ESSENTIAL_PACKAGES=(
 	"software-properties-common" # Common software properties
 	"apt-transport-https"        # Allows the use of HTTPS for APT
 	"ca-certificates"            # Common CA certificates
@@ -88,82 +114,155 @@ BASIC_PACKAGES=(
 	"nano"                       # Text editor
 )
 
-# List of PPAs to add
+# List of PPA repositories to add
 PPA_LIST=(
 	"ppa:ondrej/nginx" # For Nginx
 	"ppa:ondrej/php"   # For PHP
 )
 
 #---------------------------------------------------------------------------------
-# Functions
+# Helper Functions
+#---------------------------------------------------------------------------------
+# Prints a formatted log message
+# Usage: log "type" "Your message here"
+log() {
+	local COLOR=$([[ $1 == error ]] && echo 31 || echo 32)
+	local SEP=$(printf '%*s' "$(tput cols)" | tr ' ' '-')
+	echo -e "\033[1;${COLOR}m${SEP}\n[${1^^}] ${@:2}\n${SEP}\033[0m"
+}
+
+# Print error and exit
+error_and_exit() {
+	log error "$1"
+	exit 1
+}
+
+#---------------------------------------------------------------------------------
+# System Preparation
 #---------------------------------------------------------------------------------
 
-# Prints a formatted log message
-# Usage: log "Your message here"
-log() {
-	echo ""
-	echo "--------------------------------------------------------------------------------"
-	echo "➤  ${1^^}"
-	echo "--------------------------------------------------------------------------------"
+# Update package lists
+update_package_lists() {
+	log info "Updating package lists"
+	sudo apt-get update -y || error_and_exit "Failed to update package lists"
 }
 
-# Function to update package lists, install basic packages, add PPAs and upgrade the system
+# Upgrade the system
+upgrade_system() {
+	log info "Upgrading system packages"
+	sudo apt-get dist-upgrade -y || error_and_exit "Failed to upgrade system"
+}
+
+# Cleanup system
+cleanup_system() {
+	log info "Cleaning up system"
+	# Clean up package cache and remove unused packages to free up disk space
+	sudo apt-get autoremove -y && sudo apt-get autoclean -y && sudo apt-get clean -y || error_and_exit "Failed to clean up system"
+}
+
+# Add PPA repositories
+add_repositories() {
+	log info "Adding PPA repositories"
+	for ppa in "${PPA_LIST[@]}"; do
+		sudo add-apt-repository -y "$ppa" 2>/dev/null || error_and_exit "Failed to add repository $ppa"
+	done
+	update_package_lists
+}
+
+#---------------------------------------------------------------------------------
+# Package Installation
+#---------------------------------------------------------------------------------
+
+# Install a package
+install_package() {
+	log info "Installing ${2:-$1}"
+	sudo apt-get install -y "$1" || error_and_exit "Failed to install $1"
+}
+
+# Install essential packages
+install_essential_packages() {
+	log info "Installing essential packages"
+	update_package_lists
+	for package in "${ESSENTIAL_PACKAGES[@]}"; do
+		install_package "$package" "$package"
+	done
+}
+
+#---------------------------------------------------------------------------------
+# Nginx
+#---------------------------------------------------------------------------------
+
+install_nginx() {
+	install_package nginx "Nginx Web Server"
+}
+
+#---------------------------------------------------------------------------------
+# PHP
+#---------------------------------------------------------------------------------
+
+install_php() {
+	install_package "php$PHP_VERSION" "PHP $PHP_VERSION"
+}
+
+install_php_extensions() {
+	for extension in "${PHP_EXTENSIONS[@]}"; do
+		install_package "php$PHP_VERSION-$extension" "PHP extension: $extension"
+	done
+}
+
+#---------------------------------------------------------------------------------
+# Composer
+#---------------------------------------------------------------------------------
+
+install_composer() {
+	log info "Installing Composer"
+	curl -sS https://getcomposer.org/installer -o composer-setup.php &&
+		sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer || error_and_exit "Failed to install Composer"
+	rm -f composer-setup.php
+}
+
+install_composer_packages() {
+	log info "Installing Composer global packages"
+	for package in "${COMPOSER_GLOBAL_PACKAGES[@]}"; do
+		composer global require "$package" || error_and_exit "Failed to install Composer package $package"
+	done
+}
+
+#---------------------------------------------------------------------------------
+# Node.js
+#---------------------------------------------------------------------------------
+install_nodejs() {
+	log info "Installing Node.js via NVM"
+	curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash || error_and_exit "Failed to install NVM"
+	bash -c 'source "$HOME/.nvm/nvm.sh" && nvm install node && corepack enable yarn' || error_and_exit "Failed to install Node.js or enable yarn"
+}
+
+install_nodejs_packages() {
+	log info "Installing Node.js global packages"
+	for package in "${NODEJS_GLOBAL_PACKAGES[@]}"; do
+		npm install -g "$package" || error_and_exit "Failed to install Node.js package $package"
+	done
+}
+
+#---------------------------------------------------------------------------------
+# Main Setup
+#---------------------------------------------------------------------------------
+
+# Main setup function
 setup_system() {
-	log "Updating package lists"
-	apt-get update -y
-
-	log "Installing basic packages"
-	apt-get install -y "${BASIC_PACKAGES[@]}"
-
-	log "Adding External Repositories"
-	for ppa in "${PPA_LIST[@]}"; do add-apt-repository -y "$ppa"; done && apt-get update -y
-
-	log "Upgrading system"
-	apt-get dist-upgrade -y
-
-	log "Cleaning up"
-	apt-get autoremove -y && apt-get autoclean -y
-}
-
-setup_web_server() {
-	log "Setting up web server"
-	apt-get install -y nginx
-}
-
-setup_php_environment() {
-	log "Setting up PHP environment"
-	apt-get install -y "php$PHP_VERSION" "${PHP_EXTENSIONS[@]/#/php$PHP_VERSION-}"
-}
-
-setup_composer() {
-	log "Setting up Composer"
-	local expected_checksum actual_checksum
-	expected_checksum="$(curl -fsSL https://composer.github.io/installer.sig)"
-	curl -fsSL -o composer-setup.php https://getcomposer.org/installer
-	actual_checksum="$(sha384sum composer-setup.php | awk '{ print $1 }')"
-	if [[ "$expected_checksum" != "$actual_checksum" ]]; then
-		echo 'ERROR: Invalid Composer installer checksum'
-		rm -f composer-setup.php
-		exit 1
-	fi
-	php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-	rm composer-setup.php
-
-	log "Installing Composer global packages"
-	local user="${SUDO_USER:-$(logname)}"
-	sudo -u "$user" composer global require "${COMPOSER_GLOBAL_PACKAGES[@]}"
-}
-
-setup_nodejs() {
-	log "Setting up Node.js"
-	curl -fsSL https://deb.nodesource.com/setup_"$NODEJS_VERSION".x | bash -
-	apt-get install -y nodejs
-	# Fix permissions issues for npm global packages
-	npm config set prefix ~/.local
-	PATH=~/.local/bin/:$PATH
-	log "Installing Node.js global packages"
-	local user="${SUDO_USER:-$(logname)}"
-	npm install -g "${NODEJS_GLOBAL_PACKAGES[@]}"
+	log info "Starting system setup"
+	install_essential_packages
+	add_repositories
+	upgrade_system
+	cleanup_system
+	install_nginx
+	install_php
+	install_php_extensions
+	install_composer
+	install_composer_packages
+	install_nodejs
+	install_nodejs_packages
+	log info "System setup completed"
 }
 
 #---------------------------------------------------------------------------------
@@ -171,16 +270,10 @@ setup_nodejs() {
 #---------------------------------------------------------------------------------
 
 setup_system
-setup_web_server
-setup_php_environment
-setup_composer
-setup_nodejs
 
 #---------------------------------------------------------------------------------
 # Cleanup
 #---------------------------------------------------------------------------------
-
-log "Script execution completed"
 
 # Log the end time of the script execution
 echo "=== Script execution completed on $(date) ===" >>"$LOG_FILE"
@@ -194,4 +287,4 @@ echo "Log saved to $LOG_FILE" >/dev/tty
 # - This script is under active development. Use at your own risk.
 # - Intended for fresh Ubuntu/Debian installations only.
 # - Review the code before running on production systems.
-# - This script must be executed with root privileges.
+# - Do not run as root. This script will prompt for sudo password.

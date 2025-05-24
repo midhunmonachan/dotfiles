@@ -2,7 +2,7 @@
 > - This script is under active development. Use at your own risk.
 > - Intended for fresh Ubuntu/Debian installations only.
 > - Review the code before running on production systems.
-> - This script must be executed with root privileges.
+> - Do not run as root. This script will prompt for sudo password.
 
 # Midhun's Server Setup Script
 
