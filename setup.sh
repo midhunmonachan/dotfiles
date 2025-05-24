@@ -35,9 +35,9 @@ if ! sudo -v; then
 fi
 
 # Keep sudo alive
-while sleep 240; do
+while sleep 60; do
 	sudo -n true || exit
-	kill -0 "$$" || exit
+	kill -0 "$$" >/dev/null || exit
 done &
 
 # Exit on error, unset vars, or failed pipes
@@ -195,7 +195,13 @@ essential_packages() {
 configure_github_cli() {
 	log info "Configuring GitHub CLI"
 
-	gh auth login -p https -h github.com -w || error_and_exit "GitHub CLI login failed"
+	# Scope for GitHub CLI
+	local SCOPE="repo,user,admin:repo_hook,admin:ssh_signing_key,admin:public_key,admin:gpg_key"
+
+	# Login to GitHub CLI
+	gh auth login -s "$SCOPE" -h github.com -w || error_and_exit "GitHub CLI login failed"
+
+	# Check GitHub CLI authentication status
 	gh auth status || error_and_exit "GitHub CLI authentication status check failed"
 }
 
@@ -219,6 +225,65 @@ configure_git() {
 
 	# Verify git configuration
 	git config --list || error_and_exit "Unable to list git configuration"
+}
+
+#---------------------------------------------------------------------------------
+# SSH Key Configuration
+#---------------------------------------------------------------------------------
+
+configure_ssh_key() {
+	log info "Generating SSH key and adding to GitHub"
+
+	# Get GitHub user email automatically
+	local GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email for SSH key comment"
+
+	# Generate SSH key if it doesn't exist
+	if [[ ! -f ~/.ssh/id_ed25519 ]]; then
+		ssh-keygen -t ed25519 -C "$GITHUB_EMAIL" -f ~/.ssh/id_ed25519 -N "" || error_and_exit "Failed to generate SSH key"
+	fi
+
+	# Add SSH key to ssh-agent
+	eval "$(ssh-agent -s)" || error_and_exit "Failed to start ssh-agent"
+	ssh-add ~/.ssh/id_ed25519 || error_and_exit "Failed to add SSH key to ssh-agent"
+
+	# Add SSH key to GitHub account (use file directly)
+	gh ssh-key add ~/.ssh/id_ed25519.pub || error_and_exit "Failed to add SSH key to GitHub account"
+
+	# Set Github CLI operations protocol to SSH
+	gh config set git_protocol ssh || error_and_exit "Failed to set GitHub CLI git protocol to SSH"
+
+	echo "SSH key configured and added to GitHub successfully."
+}
+
+#---------------------------------------------------------------------------------
+# GPG Key Configuration
+#---------------------------------------------------------------------------------
+
+configure_gpg_key() {
+	log info "Generating GPG key and adding to GitHub"
+
+	# Get GitHub user name and email
+	local GITHUB_USER=$(gh api user -q .name) || error_and_exit "Unable to fetch GitHub username for GPG key"
+	local GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email for GPG key"
+
+	# Generate GPG key if it doesn't exist
+	if [[ -z "$(gpg --list-secret-keys --with-colons "$GITHUB_EMAIL" | grep '^sec:')" ]]; then
+		log info "Generating GPG key"
+		gpg --batch --passphrase "" --quick-generate-key "${GITHUB_USER} <${GITHUB_EMAIL}>" ed25519 cert,sign 0 || error_and_exit "Failed to generate GPG key"
+	fi
+
+	# Get GPG key ID
+	local GPG_KEY_ID=$(gpg --list-keys --with-colons "${GITHUB_USER} <${GITHUB_EMAIL}>" | awk -F: '/^pub:/ { print $5 }' | head -n 1)
+
+	# Add GPG key to GitHub account
+	gh gpg-key add <(gpg --armor --export "$GPG_KEY_ID") || error_and_exit "Failed to add GPG key to GitHub account"
+
+	# Set GPG key configuration for Git
+	git config --global user.signingkey "$GPG_KEY_ID" || error_and_exit "Failed to set GPG key for Git"
+	git config --global commit.gpgsign true || error_and_exit "Failed to set GPG signing for commits"
+	git config --global tag.gpgsign true || error_and_exit "Failed to set GPG signing for tags"
+
+	echo "GPG key configured and added to GitHub successfully."
 }
 
 #---------------------------------------------------------------------------------
@@ -325,6 +390,8 @@ setup_system() {
 
 	configure_github_cli
 	configure_git
+	configure_ssh_key
+	configure_gpg_key
 
 	configure_ufw
 	configure_fail2ban
