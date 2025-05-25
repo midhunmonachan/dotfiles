@@ -16,25 +16,13 @@
 
 ## How to Use
 
-1.  Download the script:
-    ```bash
-    curl -O https://raw.githubusercontent.com/midhunmonachan/dotfiles/main/setup.sh
-    ```
+Copy and paste this one-liner in your terminal to download and run the script automatically:
 
-2.  Ensure the script `setup.sh` has execute permissions:
-    ```bash
-    chmod +x setup.sh
-    ```
-3.  Run the script:
-    ```bash
-    ./setup.sh
-    ```
-    The script will prompt for `sudo` access when necessary.
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/midhunmonachan/dotfiles/main/setup.sh)
+```
 
-4.  After successful installation, you can remove the setup script:
-    ```bash
-    rm setup.sh
-    ```
+The script will prompt for `sudo` access when necessary.
 
 ## Script Details
 
