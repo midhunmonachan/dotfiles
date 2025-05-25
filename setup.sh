@@ -2,81 +2,11 @@
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 # ┃=======================> Midhun's Server Setup Script <=======================┃
 # ┃                                                                              ┃
-# ┃  Automated server configuration and software installation for Ubuntu/Debian  ┃
+# ┃  Automated server configuration and software installation for Ubuntu 24.04   ┃
 # ┃------------------------------------------------------------------------------┃
 # ┃  Author: Midhun Monachan                                Updated: 2025-05-21  ┃
 # ┃  GitHub: github.com/midhunmonachan                             License: MIT  ┃
 # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-
-#---------------------------------------------------------------------------------
-# Checks
-#---------------------------------------------------------------------------------
-
-# Check if it is running Ubuntu 24.04
-if ! grep -q "Ubuntu 24.04" /etc/os-release; then
-	echo "ERROR: This script is intended for Ubuntu 24.04 only."
-	exit 1
-fi
-
-# Ensure the script is not executed as root
-if [[ $EUID -eq 0 ]]; then
-	echo "ERROR: Do not run this script as root. Please execute as a regular user."
-	exit 1
-fi
-
-#---------------------------------------------------------------------------------
-# Initialization
-#---------------------------------------------------------------------------------
-
-# Get sudo privileges
-if ! sudo -v; then
-	echo "ERROR: Failed to obtain sudo privileges. Please check your user permissions."
-	exit 1
-fi
-
-# Keep sudo alive
-while sleep 60; do
-	sudo -n true || exit
-	kill -0 "$$" >/dev/null || exit
-done &
-
-# Exit on error, unset vars, or failed pipes
-set -euo pipefail
-
-# Suppress interactive prompts during package installs
-export DEBIAN_FRONTEND=noninteractive
-
-# Log file for script output
-LOG_FILE="/var/log/dotfiles/$(date +%Y%m%d-%H%M%S).log"
-
-# Create log directory if it doesn't exist and set permissions
-sudo mkdir -p "$(dirname "$LOG_FILE")"
-sudo chmod 777 "$(dirname "$LOG_FILE")"
-
-# Create log file and redirect output to it
-touch "$LOG_FILE" && exec > >(tee -a "$LOG_FILE") 2>&1
-
-# Log the start time of the script execution
-echo "=== Script execution started on $(date) ===" >>"$LOG_FILE"
-
-#---------------------------------------------------------------------------------
-# Script Cleanup
-#---------------------------------------------------------------------------------
-
-# Function to clean up resources when script exits
-script_cleanup() {
-	# Kill background process that keeps sudo alive
-	kill "$(jobs -p)" &>/dev/null || true
-
-	# Log script completion
-	echo "=== Script execution completed on $(date) ===" >>"$LOG_FILE"
-
-	# Reset terminal settings
-	tput sgr0
-}
-
-# Register the cleanup function to run when the script exits
-trap script_cleanup EXIT INT TERM
 
 #---------------------------------------------------------------------------------
 # Configuration Variables
@@ -143,6 +73,105 @@ PPA_LIST=(
 )
 
 #---------------------------------------------------------------------------------
+# Initial Checks
+#---------------------------------------------------------------------------------
+
+# Check if it is running Ubuntu 24.04
+if ! grep -q "Ubuntu 24.04" /etc/os-release; then
+	echo "ERROR: This script is intended for Ubuntu 24.04 only."
+	exit 1
+fi
+
+# Ensure the script is not executed as root
+if [[ $EUID -eq 0 ]]; then
+	echo "ERROR: Do not run this script as root."
+	exit 1
+fi
+
+#---------------------------------------------------------------------------------
+# Initialization
+#---------------------------------------------------------------------------------
+
+# Exit on error, unset vars, or failed pipes
+set -euo pipefail
+
+CURRENT_COMMAND=""
+LAST_COMMAND=""
+
+# Track the last and current line number for accurate error reporting
+trap 'LAST_COMMAND=$CURRENT_COMMAND; CURRENT_COMMAND=$BASH_COMMAND; LAST_LINENO=$LINENO' DEBUG
+
+# Suppress interactive prompts during package installs
+export DEBIAN_FRONTEND=noninteractive
+
+# Log file for script output
+LOG_FILE="/var/log/dotfiles/$(date +%Y%m%d-%H%M%S).log"
+
+# Create log directory if it doesn't exist and set permissions
+sudo mkdir -p "$(dirname "$LOG_FILE")"
+sudo chmod 777 "$(dirname "$LOG_FILE")"
+
+# Create log file and redirect output to it
+touch "$LOG_FILE" && exec > >(tee -a "$LOG_FILE") 2>&1
+
+# Log the start time of the script execution
+echo "=== Script execution started on $(date) ===" >>"$LOG_FILE"
+
+#---------------------------------------------------------------------------------
+# Sudo Keep-Alive Setup
+#---------------------------------------------------------------------------------
+
+# Keep sudo authentication active for the script's duration
+sudo -v
+(while sudo -n true 2>/dev/null; do sleep 2; done) &
+SUDO_PID=$!
+echo "Sudo keep-alive PID: $SUDO_PID" >>"$LOG_FILE"
+
+#---------------------------------------------------------------------------------
+# Script Cleanup
+#---------------------------------------------------------------------------------
+
+script_cleanup() {
+	local exit_signal=${1:-EXIT}
+	local exit_status=${2:-0}
+	local line_number=${3:-unknown}
+
+	trap - EXIT INT TERM # Clear traps to prevent re-entry
+	echo >/dev/tty
+
+	# Use LAST_LINENO if available
+	if [[ "$line_number" == "auto" && -n "${LAST_LINENO-}" ]]; then
+		line_number=$LAST_LINENO
+	fi
+
+	# Before trying to use LOG_FILE, check if it's defined
+	if [[ -n "${LOG_FILE-}" && -f "$LOG_FILE" ]]; then
+		echo "=== Stopping: Received $exit_signal (Exit: $exit_status, Line: $line_number), PID: $$ ===" >>"$LOG_FILE"
+
+		# Similarly check SUDO_PID before using it
+		if [[ -n "${SUDO_PID-}" ]]; then
+			echo "Stopping sudo keep-alive process: $SUDO_PID" >>"$LOG_FILE"
+			kill "$SUDO_PID" &>/dev/null || true
+		fi
+
+		echo "=== Script execution ended $(date) ===" >>"$LOG_FILE"
+	else
+		echo "Script stopped before log file initialization" >/dev/tty
+	fi
+
+	echo "Script stopped by signal: $exit_signal at line $line_number (exit code: $exit_status)" >/dev/tty
+
+	if [[ -n "${LOG_FILE-}" && -f "$LOG_FILE" ]]; then
+		echo "Log file created at: $LOG_FILE" >/dev/tty
+	fi
+}
+
+trap 'script_cleanup ERR $? auto' ERR
+trap 'script_cleanup INT $? "unknown"' INT
+trap 'script_cleanup TERM $? "unknown"' TERM
+trap 'script_cleanup EXIT $? auto' EXIT
+
+#---------------------------------------------------------------------------------
 # Helper Functions
 #---------------------------------------------------------------------------------
 # Prints a formatted log message
@@ -158,7 +187,6 @@ error_and_exit() {
 	log error "$1"
 	exit 1
 }
-
 #---------------------------------------------------------------------------------
 # System Preparation
 #---------------------------------------------------------------------------------
@@ -272,7 +300,7 @@ configure_ssh_key() {
 	gh config set git_protocol ssh || error_and_exit "Failed to set GitHub CLI git protocol to SSH"
 
 	# Add GitHub's SSH key to known_hosts
-	ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || error_and_exit "Failed to add GitHub to known_hosts"
+	ssh-keyscan -H github.com >>~/.ssh/known_hosts 2>/dev/null || error_and_exit "Failed to add GitHub to known_hosts"
 
 	echo "SSH key configured and added to GitHub successfully."
 }
@@ -372,10 +400,7 @@ bash_setup() {
 	log info "Setting up bash profile"
 
 	# Set bash starting directory
-	grep -qFx -- "cd ~" ~/.bashrc || echo "cd ~" >> ~/.bashrc
-
-	# Reload bash profile
-	source ~/.bashrc || error_and_exit "Failed to reload bash profile"
+	grep -qFx -- "cd ~" ~/.bashrc || echo "cd ~" >>~/.bashrc
 }
 
 #---------------------------------------------------------------------------------
@@ -390,9 +415,9 @@ configure_ufw() {
 	sudo ufw default allow outgoing || error_and_exit "Failed to set UFW outgoing policy"
 
 	# Allow essential ports
-	sudo ufw allow ssh || error_and_exit "Failed to allow SSH through UFW"
-	sudo ufw allow http || error_and_exit "Failed to allow HTTP through UFW"
-	sudo ufw allow https || error_and_exit "Failed to allow HTTPS through UFW"
+	for port in ssh http https; do
+		sudo ufw allow "$port" || error_and_exit "Failed to allow $port through UFW"
+	done
 
 	# Enable UFW
 	sudo ufw --force enable || error_and_exit "Failed to enable UFW"
