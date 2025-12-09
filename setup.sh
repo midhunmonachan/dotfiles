@@ -206,6 +206,8 @@ upgrade_system() {
 # Cleanup system
 cleanup_system() {
 	log info "Cleaning up system"
+	# Remove apache2 if installed (since we use nginx) and clean up system in one line
+	dpkg -l | grep -q apache2 && log info "Uninstalling apache2 (conflicts with nginx)" && sudo systemctl stop apache2 || true && sudo apt-get purge -y apache2 apache2-utils apache2-bin apache2.2-common || true && sudo rm -rf /etc/apache2 /var/log/apache2 || true
 	# Clean up package cache and remove unused packages to free up disk space
 	sudo apt-get autoremove -y && sudo apt-get autoclean -y && sudo apt-get clean -y || error_and_exit "Failed to clean up system"
 }
@@ -243,20 +245,31 @@ essential_packages() {
 #---------------------------------------------------------------------------------
 
 configure_github_cli() {
-	log info "Configuring GitHub CLI"
+	       log info "Configuring GitHub CLI"
 
-	# Scope for GitHub CLI
-	local SCOPE="repo,user,admin:repo_hook,admin:ssh_signing_key,admin:public_key,admin:gpg_key"
+	       # Scope for GitHub CLI
+	       local SCOPE="repo,user,admin:repo_hook,admin:ssh_signing_key,admin:public_key,admin:gpg_key"
+	       local max_retries=3
+	       local attempt=1
+	       local success=0
 
-	# Login to GitHub CLI
-	gh auth login -s "$SCOPE" -h github.com -w || error_and_exit "GitHub CLI login failed"
+		       # Only login if not already authenticated
+		       if ! gh auth status --hostname github.com &>/dev/null; then
+			       while [[ $attempt -le $max_retries ]]; do
+				       gh auth login -s "$SCOPE" -h github.com -w && success=1 && break
+				       log error "GitHub CLI login failed (attempt $attempt/$max_retries)"
+				       ((attempt++))
+				       sleep 30 # Wait before retrying
+			       done
 
-	# Check GitHub CLI authentication status
-	gh auth status || error_and_exit "GitHub CLI authentication status check failed"
+			       if [[ $success -ne 1 ]]; then
+				       error_and_exit "GitHub CLI login failed after $max_retries attempts"
+			       fi
+		       fi
 
-	# Get name and email for logged in Github User
-	GITHUB_USER=$(gh api user -q .name) || error_and_exit "Unable to fetch GitHub username"
-	GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email"
+		       gh auth status || error_and_exit "GitHub CLI authentication status check failed"
+		       GITHUB_USER=$(gh api user -q .name) || error_and_exit "Unable to fetch GitHub username"
+		       GITHUB_EMAIL=$(gh api user/emails --jq '.[0].email') || error_and_exit "Unable to fetch GitHub email"
 }
 
 #---------------------------------------------------------------------------------
@@ -321,8 +334,12 @@ configure_gpg_key() {
 	# Get GPG key ID
 	local GPG_KEY_ID=$(gpg --list-keys --with-colons "${GITHUB_USER} <${GITHUB_EMAIL}>" | awk -F: '/^pub:/ { print $5 }' | head -n 1)
 
-	# Add GPG key to GitHub account
-	gh gpg-key add <(gpg --armor --export "$GPG_KEY_ID") || error_and_exit "Failed to add GPG key to GitHub account"
+	       # Add GPG key to GitHub account only if not already present
+	       if ! gh gpg-key list | grep -q "$GPG_KEY_ID"; then
+		       gh gpg-key add <(gpg --armor --export "$GPG_KEY_ID") || error_and_exit "Failed to add GPG key to GitHub account"
+	       else
+		       log info "GPG key already exists on GitHub account, skipping add."
+	       fi
 
 	# Set GPG key configuration for Git
 	git config --global user.signingkey "$GPG_KEY_ID" || error_and_exit "Failed to set GPG key for Git"
@@ -487,14 +504,21 @@ composer_packages() {
 install_nodejs() {
 	log info "Installing Node.js via NVM"
 
+	# Ensure libatomic1 is installed for Node.js shared library dependency
+	sudo apt-get install -y libatomic1 || error_and_exit "Failed to install libatomic1 (required for Node.js)"
+
 	# Download and Run NVM Setup Script
 	curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash || error_and_exit "Failed to install NVM"
 
 	# Source NVM into the current script session
 	export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh" || error_and_exit "Failed to source NVM"
 
-	# Install latest Node.js and enable yarn (npm alternative)
-	nvm install node && corepack enable yarn || error_and_exit "Failed to install Node.js or enable yarn"
+	# Install latest Node.js
+	nvm install node || error_and_exit "Failed to install Node.js"
+	# Install corepack globally using npm
+	npm install -g corepack || error_and_exit "Failed to install corepack"
+	# Enable yarn via corepack
+	corepack enable yarn || error_and_exit "Failed to enable yarn"
 }
 
 install_nodejs_packages() {
