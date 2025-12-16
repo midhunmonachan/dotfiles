@@ -25,7 +25,7 @@ NVM_VERSION="0.40.3" # Latest as of 2025-05-21
 PHP_EXTENSIONS=(
 	"cli"       # Command-line interface for PHP scripts
 	"fpm"       # FastCGI Process Manager for serving PHP via web servers
-	"mysql"     # MySQL database driver for PHP
+#	"mysql"     # MySQL database driver for PHP
 	"mbstring"  # Multibyte string support (required for many frameworks)
 	"xml"       # XML parsing support
 	"curl"      # Client URL library for PHP (HTTP requests, APIs)
@@ -55,7 +55,7 @@ ESSENTIAL_PACKAGES=(
 	"ca-certificates"            # Common CA certificates
 	"git"                        # Version control system
 	"gnupg"                      # GNU Privacy Guard
-	"gh"                         # GitHub CLI
+#	"gh"                         # GitHub CLI
 	"curl"                       # Command line tool for transferring data
 	"wget"                       # Command line utility for downloading files
 	"ufw"                        # Uncomplicated Firewall
@@ -540,8 +540,8 @@ setup_system() {
 	upgrade_system
 	cleanup_system
 
-	configure_github_cli
-	configure_git
+	#configure_github_cli
+	#configure_git
 
 	configure_ssh_key
 	configure_gpg_key
